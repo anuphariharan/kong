@@ -436,7 +436,7 @@ local function tcp_server(port, opts, ...)
     function(port, opts)
       local socket = require "socket"
       local server = assert(socket.tcp())
-      server:settimeout(10)
+      server:settimeout(360)
       assert(server:setoption('reuseaddr', true))
       assert(server:bind("*", port))
       assert(server:listen())
@@ -519,27 +519,29 @@ end
 -- Accepts a single connection, reading once and then closes
 -- @name udp_server
 -- @param `port`    The port where the server will be listening to
+-- @param `n`       The number of packets that will be received
+-- @param `timeout` Timeout per read
 -- @return `thread` A thread object
-local function udp_server(port)
+local function udp_server(port, n, timeout)
   local threads = require "llthreads2.ex"
 
   local thread = threads.new({
-    function(port)
+    function(port, n)
       local socket = require "socket"
       local server = assert(socket.udp())
-      server:settimeout(5)
+      server:settimeout(timeout or 360)
       server:setoption("reuseaddr", true)
       server:setsockname("127.0.0.1", port)
-      local data, err = server:receive()
+      local data, err = {}
+      for i = 1, n do
+        data[i], err = server:receive()
+      end
       server:close()
-      return data, err
+      return (n == 1 and data[1] or data), err
     end
-  }, port or MOCK_UPSTREAM_PORT)
-
+  }, port or MOCK_UPSTREAM_PORT, n or 1)
   thread:start()
-
-  ngx.sleep(0.1)
-
+  ngx.sleep(0.01)
   return thread
 end
 
